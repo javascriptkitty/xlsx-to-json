@@ -1,0 +1,10 @@
+{
+  "name": "excel-to-json",
+  "version": "1.0.0",
+  "main": "index.js",
+  "author": "Cristina.Alekseeva <cristina.alekseeva@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "xlsx": "^0.18.5"
+  }
+}
