@@ -1,0 +1,21 @@
+{
+  "country": {
+    "name": "United States",
+    "code": "US",
+    "translationID": "eg.console.api.payment.country.united.states"
+  },
+  "states": [
+    {
+      "name": "California",
+      "code": "CA",
+      "GaiaId": "12345",
+      "translationID": "eg.console.api.payment.state.california"
+    },
+    {
+      "name": "Texas",
+      "code": "TX",
+      "GaiaId": "67890",
+      "translationID": "eg.console.api.payment.state.texas"
+    }
+  ]
+}
