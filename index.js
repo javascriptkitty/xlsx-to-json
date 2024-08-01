@@ -14,7 +14,7 @@ const locales = [
   'fr_FR',
   'de_DE',
 ];
-let countriesWithIds = {};
+let countriesWithIds = {}; // 250 entries
 let countriesTranslations = [];
 let statesTranslations = [];
 let citiesTranslations = [];
@@ -39,7 +39,6 @@ const readTranslations = () => {
   countriesTranslations
     .filter(({ locale }) => locale === 'en-US')
     .forEach((el) => (countriesWithIds[el.short_name] = el.gaia_id));
-  console.log('countriesWithIds', Object.keys(countriesWithIds).length);
 };
 
 const writeCountryTranslation = (transId, string) => {
@@ -56,8 +55,8 @@ const writeCountryTranslation = (transId, string) => {
       fs.appendFileSync(getFileName(locale), stringToAppend);
     });
   } else {
-    // add them to the en_US
     notFoundCountries.push(string);
+    fs.appendFileSync(getFileName('en_US'), `${transId}=${string}\n`);
   }
 };
 
@@ -91,15 +90,25 @@ const writeStateTranslation = (transId, gaia_id, tags) => {
 };
 
 const getTranslationID = (type, name) => {
-  const nameWithoutSpecialChars = name.replace(/['.,ʻ]/g, ''); // how to replace øð
+  const replacements = {
+    æ: 'ae',
+    ø: 'o',
+    ð: 'd',
+  };
+  // let nameNormalized = name.replace(/['.,ʻ]/g, '');
+
   // const nameNormalized = nameWithoutSpecialChars
   //   .normalize('NFD')
   //   .replace(/[\u0300-\u036f]/g, '');
-  const nameNormalized = nameWithoutSpecialChars
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '');
-  return `eg.console.api.payment.${type}.${nameNormalized
+
+  const nameNormalized = name
     .toLowerCase()
+    .replace(/['.,ʻ]/g, '')
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[^\u0000-\u007F]/g, (char) => replacements[char] || '');
+  console.log(name, nameNormalized);
+  return `eg.console.api.payment.${type}.${nameNormalized
     .split(/[- ]/g)
     .join('.')}`;
 };
@@ -112,29 +121,30 @@ const readSpreadsheets = () => {
 
   const tempCountries = reader.utils.sheet_to_json(file.Sheets[countriesList]);
   const tempStates = reader.utils.sheet_to_json(file.Sheets[statesList]);
-  console.log('countries from spreadsheet', tempCountries.length);
+
   tempCountries.forEach((res) => {
-    const translationID = getTranslationID('country', res.name);
+    const name = res.name.trim();
+    const translationID = getTranslationID('country', name);
     const country = {
-      name: res.name,
+      name,
       code: res.code,
       translationID,
     };
     countries.push({ country, states: [] });
-    writeCountryTranslation(translationID, res.name);
+    writeCountryTranslation(translationID, name);
   });
 
   tempStates.forEach((res) => {
     const { gaia_id, short_name, country, prov, tags } = res;
-
+    const name = short_name.trim();
     if (country !== 'null') {
-      const translationID = getTranslationID('state', short_name);
+      const translationID = getTranslationID('state', name);
       const countryIdx = countries.findIndex(
         (el) => el.country.code === country
       );
       const province = prov === 'N/A' || prov === 'null' ? '' : prov;
       const state = {
-        name: short_name,
+        name,
         code: province,
         GaiaId: gaia_id,
         translationID,
@@ -164,15 +174,26 @@ const writeJSON = (data, fileName) => {
 };
 
 const prepareTranslationFiles = () => {
-  // if (fs.existsSync(dir)) {
-  //   fs.rmSync(dir, { recursive: true, force: true })
-  // }
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir);
-
-  locales.forEach((locale) => fs.writeFileSync(getFileName(locale), ''));
+  if (fs.existsSync(dir)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+  if (fs.existsSync('./output')) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir);
+    locales.forEach((locale) => fs.writeFileSync(getFileName(locale), ''));
+  }
+  // locales.forEach((locale) =>
+  //   fs.truncate(getFileName(locale), 0, () => console.log('clear files'))
+  // );
 };
 
 const printNotFound = () => {
+  // fs.writeFileSync(
+  //   './output/notFoundStates.json',
+  //   JSON.stringify({ notFoundStatesWithLocale }, null, 4)
+  // );
   const translationNotFound = notFoundStatesWithLocale.reduce((obj, val) => {
     const itemId = val.split(' ')[1];
     const currCount = obj[itemId] ?? 0;
@@ -192,15 +213,11 @@ const init = () => {
 
   const countries = readSpreadsheets();
 
-  // writeJSON(countries, 'countries_states.json');
+  writeJSON(countries, './output/countries_states.json');
 
   // console.log(translationNotFound);
-  // writeStateTranslation('state', '178278', '["geo-admin:district"]');
+  // writeStateTranslation('state', '3000652709', '["geo-admin:province"]');
   printNotFound();
-  fs.writeFileSync(
-    './output/notFoundStates.json',
-    JSON.stringify({ notFoundStatesWithLocale }, null, 4)
-  );
 
   // console.log(notFoundStates.size);
 };
