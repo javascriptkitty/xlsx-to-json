@@ -60,7 +60,7 @@ const writeCountryTranslation = (transId, string) => {
   }
 };
 
-const writeStateTranslation = (transId, gaia_id, tags) => {
+const writeStateTranslation = (transId, gaia_id, tags, name) => {
   let list;
 
   if (tags.includes('geo-admin:city')) {
@@ -73,20 +73,24 @@ const writeStateTranslation = (transId, gaia_id, tags) => {
     list = statesTranslations.filter((el) => el.gaia_id == gaia_id);
   }
 
-  locales.forEach((locale) => {
-    const translationFound = list.find(
-      (line) => line.locale.replace('-', '_') === locale
-    );
-    if (translationFound) {
-      const localizedName = translationFound.short_name;
-      const stringToAppend = `${transId}=${localizedName}\n`;
+  if (list && list.length > 0) {
+    locales.forEach((locale) => {
+      const translationFound = list.find(
+        (line) => line.locale.replace('-', '_') === locale
+      );
+      if (translationFound) {
+        const localizedName = translationFound.short_name;
+        const stringToAppend = `${transId}=${localizedName}\n`;
 
-      fs.appendFileSync(getFileName(locale), stringToAppend);
-    } else {
-      notFoundStatesWithLocale.push(`${locale}, ${gaia_id}`);
-      notFoundStates.add(gaia_id);
-    }
-  });
+        fs.appendFileSync(getFileName(locale), stringToAppend);
+      }
+    });
+  } else {
+    // no translations for any of the locales
+    // notFoundStatesWithLocale.push(`${locale}, ${gaia_id}`);
+    notFoundStates.add(gaia_id);
+    fs.appendFileSync(getFileName('en_US'), `${transId}=${name}\n`);
+  }
 };
 
 const getTranslationID = (type, name) => {
@@ -95,11 +99,6 @@ const getTranslationID = (type, name) => {
     ø: 'o',
     ð: 'd',
   };
-  // let nameNormalized = name.replace(/['.,ʻ]/g, '');
-
-  // const nameNormalized = nameWithoutSpecialChars
-  //   .normalize('NFD')
-  //   .replace(/[\u0300-\u036f]/g, '');
 
   const nameNormalized = name
     .toLowerCase()
@@ -107,7 +106,7 @@ const getTranslationID = (type, name) => {
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
     .replace(/[^\u0000-\u007F]/g, (char) => replacements[char] || '');
-  console.log(name, nameNormalized);
+
   return `eg.console.api.payment.${type}.${nameNormalized
     .split(/[- ]/g)
     .join('.')}`;
@@ -130,7 +129,7 @@ const readSpreadsheets = () => {
       code: res.code,
       translationID,
     };
-    countries.push({ country, states: [] });
+    countries.push({ country });
     writeCountryTranslation(translationID, name);
   });
 
@@ -145,13 +144,14 @@ const readSpreadsheets = () => {
       const province = prov === 'N/A' || prov === 'null' ? '' : prov;
       const state = {
         name,
-        code: province,
+        code: province.split('-')[1],
         GaiaId: gaia_id,
         translationID,
       };
 
+      if (!countries[countryIdx].states) countries[countryIdx].states = [];
       countries[countryIdx].states.push(state);
-      writeStateTranslation(translationID, gaia_id, tags);
+      writeStateTranslation(translationID, gaia_id, tags, name);
     }
   });
 
@@ -190,10 +190,13 @@ const prepareTranslationFiles = () => {
 };
 
 const printNotFound = () => {
+  // all the missing locales
   // fs.writeFileSync(
   //   './output/notFoundStates.json',
   //   JSON.stringify({ notFoundStatesWithLocale }, null, 4)
   // );
+
+  // entries that don't appear in any feed (all the 10 locales)
   const translationNotFound = notFoundStatesWithLocale.reduce((obj, val) => {
     const itemId = val.split(' ')[1];
     const currCount = obj[itemId] ?? 0;
@@ -207,19 +210,26 @@ const printNotFound = () => {
   });
 };
 
+const checkLength = (countries) => {
+  // sum of all of the states from the config
+  const sum = countries.reduce((acc, currentValue) => {
+    // console.log(currentValue);s
+    const num = currentValue.states ? currentValue.states.length : 0;
+    return acc + num;
+  }, 0);
+  console.log(sum); //should be 3216-1(Abyei Area)
+};
+
 const init = () => {
   readTranslations();
   prepareTranslationFiles();
 
   const countries = readSpreadsheets();
-
   writeJSON(countries, './output/countries_states.json');
 
-  // console.log(translationNotFound);
   // writeStateTranslation('state', '3000652709', '["geo-admin:province"]');
   printNotFound();
-
-  // console.log(notFoundStates.size);
+  checkLength(countries);
 };
 
 init();
